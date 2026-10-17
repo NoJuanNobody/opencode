@@ -72,7 +72,8 @@ export interface Interface {
   readonly wait: (id: Shell.ID) => Effect.Effect<Shell.Info, NotFoundError>
   // A known shell's terminal state and bounded tail. Missing capture remains distinct from its exit status.
   readonly result: (started: Shell.Info) => Effect.Effect<ShellResult.Result>
-  // Replaces the running command's timeout from now; zero clears it.
+  // Replaces the running command's timeout from now; zero clears it. Ignored once the process has
+  // ended and only its output is still being captured.
   readonly timeout: (id: Shell.ID, duration: number) => Effect.Effect<Shell.Info, NotFoundError>
   readonly output: (id: Shell.ID, input?: Shell.OutputInput) => Effect.Effect<Shell.Output, NotFoundError>
   readonly remove: (id: Shell.ID) => Effect.Effect<void, NotFoundError>
