@@ -353,17 +353,22 @@ const layer = () =>
                   }),
               )
 
+              let finishing = false
               const finish = (status: Info["status"], exit?: number, beforeWait = Effect.void, signal?: string) =>
                 Effect.gen(function* () {
-                  if (command.info.status !== "running") return
+                  if (finishing) return
+                  finishing = true
+                  const completed = Date.now()
+                  yield* beforeWait
+                  yield* outputDone.await
+                  // Report the terminal status only once captured output is complete, so a reader that
+                  // sees it never reads a partial file.
                   command.info = produce(command.info, (draft) => {
                     draft.status = status
                     if (exit !== undefined) draft.exit = exit
                     if (signal !== undefined) draft.signal = signal
-                    draft.time.completed = Date.now()
+                    draft.time.completed = completed
                   })
-                  yield* beforeWait
-                  yield* outputDone.await
                   // Resolve waiters with the terminal Info before any retention eviction, so an evicted
                   // command still reports success rather than the removal NotFoundError. This runs before
                   // the timeout-fiber interrupt below, which on the timeout path would otherwise cancel
@@ -389,9 +394,11 @@ const layer = () =>
 
               command.timeout = (duration) =>
                 Effect.gen(function* () {
+                  // The timeout fiber may be the one finishing; interrupting it would abandon its waiters.
+                  if (finishing) return
                   if (command.timeoutFiber) yield* Fiber.interrupt(command.timeoutFiber)
                   command.timeoutFiber = undefined
-                  if (duration === 0 || command.info.status !== "running") return
+                  if (duration === 0) return
                   command.timeoutFiber = runFork(
                     Effect.sleep(Duration.millis(duration)).pipe(
                       Effect.flatMap(() =>
